@@ -1,0 +1,23 @@
+.circle {
+  display: inline-flex;
+  overflow: hidden;
+  width: 200px;
+}
+
+.circle__half {
+  height: 200px;
+  width: 100px;
+  position: relative;
+  overflow: hidden;
+}
+
+.circle__half:before {
+  height: inherit;
+  width: inherit;
+  position: absolute;
+  content: "";
+  border-radius: 100px 0 0 100px;
+  background-color: #0087cf;
+  transform-origin: 100% 50%;
+  transform: rotate(90deg);
+}

@@ -39,7 +39,6 @@ export class GeolocationService {
     );
   }
 
-
   stopTracking() {
     if (this.watchId !== null) {
       // Clear the geolocation watch process using its ID.
