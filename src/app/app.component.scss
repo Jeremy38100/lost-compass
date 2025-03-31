@@ -1,12 +1,45 @@
+$circle-size: 350px;
+$center-circle-size: 30px;
+
+main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.form {
+}
+
+.content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+}
+
+input {
+  text-align: center;
+  margin-bottom: 0;
+}
+
+.container-fluid {
+  padding-top: 40px;
+}
+
+.button-red {
+  background-color: #eb102f;
+  border-color: #eb102f;
+}
+
 .circle {
   display: inline-flex;
   overflow: hidden;
-  width: 200px;
+  width: $circle-size;
 }
 
 .circle__half {
-  height: 200px;
-  width: 100px;
+  height: $circle-size;
+  width: $circle-size / 2;
   position: relative;
   overflow: hidden;
 }
@@ -16,8 +49,26 @@
   width: inherit;
   position: absolute;
   content: "";
-  border-radius: 100px 0 0 100px;
-  background-color: #0087cf;
+  border-radius: $circle-size/2 0 0 $circle-size/2;
+  background-color: #0172ad;
   transform-origin: 100% 50%;
-  transform: rotate(90deg);
+  transform: rotate(
+    var(--rotation)
+  ); /* Updated to use the variable for rotation */
+}
+
+.circle_center {
+  transform: scale(-1, -1);
+  height: $center-circle-size;
+  width: $center-circle-size;
+  position: relative;
+  overflow: hidden;
+  background-color: #0172ad;
+  border-radius: 100px;
+  transform-origin: 7px 95px;
+}
+
+.distance {
+  margin: 16px 0;
+  font-size: 1.3em;
 }

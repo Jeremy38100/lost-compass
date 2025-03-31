@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
-import { ActivatedRoute, RouterOutlet } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { bearing, distance, point } from '@turf/turf';
 import { firstValueFrom } from 'rxjs';
 import { CompassService } from './services/compass.service';
@@ -10,62 +11,141 @@ export function getTurfPoint(lat: number, long: number) {
   return point([long, lat]);
 }
 
+export function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, CommonModule],
+  imports: [CommonModule, FormsModule],
   // templateUrl: './app.component.html',
   template: `
-    <div
-      style="display: flex; flex-direction: column;  justify-content: center; margin: 50px;"
-    >
-      <router-outlet></router-outlet>
+    <main class="container-fluid">
+      <div class="form">
+        <form>
+          <fieldset>
+            <label>
+              🗺️ Coordinates : lat,lng
+              <input
+                name="coordinates"
+                placeholder="45.1989, 5.7248"
+                [(ngModel)]="coordinatesTargetInput"
+                (change)="onCoordinatesChange()"
+              />
+            </label>
+          </fieldset>
+          <label>📐 Arc span °</label>
+          <fieldset role="group">
+            <button
+              [disabled]="circleRadius <= 10"
+              (click)="increaseCircleRadius(-10)"
+            >
+              -
+            </button>
+            <input name="circleRadius" [(ngModel)]="circleRadius" />
+            <button
+              [disabled]="circleRadius >= 170"
+              (click)="increaseCircleRadius(10)"
+            >
+              +
+            </button>
+          </fieldset>
+          <fieldset>
+            <label>
+              <input
+                type="checkbox"
+                name="isShowDistance"
+                [(ngModel)]="isShowDistance"
+              />
+              📏 Show distance
+            </label>
+          </fieldset>
+          <div style="display: flex; gap: 10px">
+            <button
+              *ngIf="!isInit"
+              (click)="startTrackingData()"
+              style="width:100%"
+            >
+              START
+            </button>
+            <ng-container *ngIf="isInit">
+              <button (click)="update()" style="width:100%">UPDATE</button>
+              <button
+                *ngIf="!isTracking"
+                (click)="startTracking()"
+                class="button-red"
+                style="width:100%; "
+              >
+                START TRACKING
+              </button>
+              <button
+                *ngIf="isTracking"
+                (click)="stopTracking()"
+                class="button-red"
+                style="width:100%; "
+              >
+                STOP TRACKING
+              </button>
+            </ng-container>
+          </div>
+        </form>
+      </div>
 
-      <button style="font-size:48px" (click)="startTracking()">
-        Start tracking
-      </button>
+      <div class="content" *ngIf="isInit">
+        <kbd [style.opacity]="isShowDistance ? 100 : 0" class="distance">
+          {{ distanceStr }}
+        </kbd>
+
+        <ng-container *ngIf="geolocation.position$ | async as position">
+          <ng-container *ngIf="compass.heading$ | async as heading">
+            <div
+              class="circle"
+              [style.transform]="
+                'rotate(' +
+                (circleRadius / 2 +
+                  bearingTotarget -
+                  (isTracking ? heading : lastDeviceHeading)) +
+                'deg)'
+              "
+            >
+              <div
+                [ngStyle]="{ '--rotation': 180 - circleRadius + 'deg' }"
+                class="circle__half"
+              ></div>
+              <div class="circle_center"></div>
+            </div>
+          </ng-container>
+        </ng-container>
+      </div>
 
       <p>{{ error }}</p>
-
-      <div *ngIf="geolocation.position$ | async as position">
-        <!--  -->
-        <p>Long: {{ position?.coords?.longitude }}</p>
-        <p>Lat: {{ position?.coords?.latitude }}</p>
-        <!--  -->
-        <p>bearing:{{ bearingTotarget }}</p>
-        <p>distance:{{ distanceToTargetMeters }}</p>
-
-        <div *ngIf="compass.heading$ | async as heading">
-          <div>
-            <p>Compass: {{ heading }}</p>
-          </div>
-          <div
-            class="circle"
-            [style.transform]="
-              'rotate(' + (45 + bearingTotarget - heading) + 'deg)'
-            "
-          >
-            <div class="circle__half"></div>
-          </div>
-        </div>
-      </div>
-    </div>
+    </main>
   `,
   styleUrl: './app.component.scss',
 })
 export class AppComponent {
-  title = 'bearing';
   error = '';
+  trackingInteval: any = null;
 
+  // TARGET
   targetLat = 0;
   targetLong = 0;
   distanceThresholdDistanceVisibleKm = 0;
 
+  // COMPUTED TARGET
   bearingTotarget = -1;
   distanceToTargetMeters = -1;
-
-  inteval: any = null;
+  lastDeviceHeading = -1;
 
   rotationToTargetCss = 45;
+
+  circleRadius = 90;
+  isShowDistance = false;
+  coordinatesTargetInput = '45.1989, 5.7248'; // Bastille
+
+  // STATUS
+  isInit = false;
+  isTracking = false;
 
   constructor(
     private activatedRoute: ActivatedRoute,
@@ -73,23 +153,48 @@ export class AppComponent {
     public compass: CompassService
   ) {}
 
+  increaseCircleRadius(value: number) {
+    this.circleRadius += value;
+    this.update().catch();
+  }
+
+  onCoordinatesChange() {
+    this.update().catch();
+  }
+
   ngOnInit(): void {
-    // ME : 45.18019252229832, 5.748618125284669
+    // this.activatedRoute.queryParams.subscribe((params) => {
+    //   this.targetLat = DEFAULT_LAT;
+    //   this.targetLong = DEFAULT_LONG;
+    //   this.distanceThresholdDistanceVisibleKm = params['distance'] || 5;
+    // });
+  }
 
-    // Grenoble - Bastille 45.19870514996176, 12.244026661872446
-    const DEFAULT_LAT = 45.19870514996176;
-    const DEFAULT_LONG = 5.724700785718445;
-
-    this.activatedRoute.queryParams.subscribe((params) => {
-      this.targetLat = params['lat'] || DEFAULT_LAT;
-      this.targetLong = params['long'] || DEFAULT_LONG;
-      this.distanceThresholdDistanceVisibleKm = params['distance'] || 5;
-    });
-
-    const self = this;
-    this.inteval = setInterval(async () => {
-      self.update();
+  startTracking() {
+    this.isTracking = true;
+    this.trackingInteval = setInterval(async () => {
+      await this.update();
     }, 1);
+  }
+
+  stopTracking() {
+    this.isTracking = false;
+    clearInterval(this.trackingInteval);
+    this.trackingInteval = null;
+  }
+
+  get distanceStr() {
+    if (this.distanceToTargetMeters === -1) {
+      return '';
+    }
+
+    if (this.isShowDistance) {
+      if (this.distanceToTargetMeters > 3000) {
+        return `${(this.distanceToTargetMeters / 1000).toFixed(1)} km`;
+      }
+      return `${this.distanceToTargetMeters.toFixed(0)} m`;
+    }
+    return '';
   }
 
   async update() {
@@ -102,7 +207,11 @@ export class AppComponent {
       myPosition?.coords.latitude,
       myPosition?.coords.longitude
     );
-    const targetPoint = getTurfPoint(this.targetLat, this.targetLong);
+
+    const [lat, lng] = this.coordinatesTargetInput
+      .split(',')
+      .map((e) => e.trim());
+    const targetPoint = getTurfPoint(Number(lat), Number(lng));
     this.bearingTotarget = (360 + bearing(myPoint, targetPoint)) % 360;
     this.distanceToTargetMeters = distance(myPoint, targetPoint, {
       units: 'meters',
@@ -110,6 +219,7 @@ export class AppComponent {
 
     try {
       const heading = await firstValueFrom(this.compass.heading$);
+      this.lastDeviceHeading = heading ?? -1;
       if (!heading) {
         console.log('No heading available');
         return;
@@ -122,7 +232,7 @@ export class AppComponent {
     this.geolocation.stopTracking();
     this.compass.stopOrientationListener();
     try {
-      clearInterval(this.inteval);
+      clearInterval(this.trackingInteval);
     } catch (error) {}
   }
 
@@ -144,8 +254,12 @@ export class AppComponent {
     }
   }
 
-  async startTracking() {
+  async startTrackingData() {
     this.startGeolocationTracking();
     await this.startCompassTracking();
+    this.isInit = true;
+    setTimeout(() => {
+      this.update();
+    }, 200);
   }
 }
